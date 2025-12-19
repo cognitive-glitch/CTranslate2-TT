@@ -3,6 +3,10 @@
 #include "cpu/parallel.h"
 #include "type_dispatch.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -48,6 +52,33 @@ namespace ctranslate2 {
                                     StorageView& output) const;
 
     DECLARE_ALL_TYPES(DECLARE_IMPL)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void Gather::compute<Device::TT, T>(const StorageView& data,
+                                        const StorageView& input,
+                                        const dim_t axis,
+                                        const dim_t batch_dims,
+                                        StorageView& output) const {
+      StorageView data_cpu = data.to(Device::CPU);
+      StorageView input_cpu = input.to(Device::CPU);
+      StorageView output_cpu(output.shape(), output.dtype(), Device::CPU);
+      Gather::compute<Device::CPU, T>(data_cpu, input_cpu, axis, batch_dims, output_cpu);
+      output.copy_from(output_cpu);
+    }
+
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    Gather::compute<Device::TT, T>(const StorageView& data,     \
+                                   const StorageView& input,    \
+                                   const dim_t axis,            \
+                                   const dim_t batch_dims,      \
+                                   StorageView& output) const;
+
+    DECLARE_ALL_TYPES(DECLARE_TT_IMPL)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

@@ -3,6 +3,9 @@
 #ifdef CT2_WITH_CUDA
 #  include "cuda/utils.h"
 #endif
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/backend.h"
+#endif
 #ifdef CT2_WITH_TENSOR_PARALLEL
 #  include <unistd.h>
 #endif
@@ -26,6 +29,12 @@ namespace ctranslate2 {
 #else
       return Device::CPU;
 #endif
+    if (device == "tt" || device == "TT")
+#ifdef CT2_WITH_TENSTORRENT
+      return Device::TT;
+#else
+      throw std::invalid_argument("This CTranslate2 package was not compiled with Tenstorrent support");
+#endif
     throw std::invalid_argument("unsupported device " + device);
   }
 
@@ -35,6 +44,8 @@ namespace ctranslate2 {
       return "cuda";
     case Device::CPU:
       return "cpu";
+    case Device::TT:
+      return "tt";
     }
     return "";
   }
@@ -53,6 +64,12 @@ namespace ctranslate2 {
 #endif
     case Device::CPU:
       return 1;
+    case Device::TT:
+#ifdef CT2_WITH_TENSTORRENT
+      return tt::get_tt_backend().get_num_devices();
+#else
+      return 0;
+#endif
     }
     return 0;
   }
@@ -87,6 +104,22 @@ namespace ctranslate2 {
   }
 #endif
 
+#ifdef CT2_WITH_TENSTORRENT
+  static thread_local int tt_device_index = 0;
+
+  template<>
+  int get_device_index<Device::TT>() {
+    return tt_device_index;
+  }
+
+  template<>
+  void set_device_index<Device::TT>(int index) {
+    if (index < 0 || index >= tt::get_tt_backend().get_num_devices())
+      throw std::invalid_argument("Invalid TT device index: " + std::to_string(index));
+    tt_device_index = index;
+  }
+#endif
+
   int get_device_index(Device device) {
     int index = 0;
     DEVICE_DISPATCH(device, index = get_device_index<D>());
@@ -103,7 +136,13 @@ namespace ctranslate2 {
       const ScopedDeviceSetter scoped_device_setter(device, index);
       cudaDeviceSynchronize();
     }
-#else
+#endif
+#ifdef CT2_WITH_TENSTORRENT
+    if (device == Device::TT) {
+      tt::get_tt_backend().synchronize(index);
+    }
+#endif
+#if !defined(CT2_WITH_CUDA) && !defined(CT2_WITH_TENSTORRENT)
     (void)device;
     (void)index;
 #endif
@@ -114,7 +153,14 @@ namespace ctranslate2 {
     if (device == Device::CUDA) {
       cudaStreamSynchronize(cuda::get_cuda_stream());
     }
-#else
+#endif
+#ifdef CT2_WITH_TENSTORRENT
+    if (device == Device::TT) {
+      const int index = get_device_index(Device::TT);
+      tt::get_tt_backend().synchronize(index);
+    }
+#endif
+#if !defined(CT2_WITH_CUDA) && !defined(CT2_WITH_TENSTORRENT)
     (void)device;
 #endif
   }

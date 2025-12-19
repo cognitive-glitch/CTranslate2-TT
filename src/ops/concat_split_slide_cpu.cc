@@ -110,5 +110,22 @@ namespace ctranslate2 {
 
     DECLARE_ALL_TYPES(DECLARE_IMPL)
 
+#ifdef CT2_WITH_TENSTORRENT
+#define DECLARE_TT_IMPL(T)                                              \
+    template void                                                       \
+    Concat::compute<Device::TT, T>(const std::vector<const StorageView*>& inputs, \
+                                   StorageView& output) const;          \
+    template void                                                       \
+    Split::compute<Device::TT, T>(const StorageView& input,             \
+                                  std::vector<StorageView*>& outputs) const; \
+    template void                                                       \
+    Slide::compute<Device::TT, T>(const StorageView& input,             \
+                                  StorageView& output,                  \
+                                  const dim_t& index) const;
+
+    DECLARE_ALL_TYPES(DECLARE_TT_IMPL)
+#undef DECLARE_TT_IMPL
+#endif
+
   }
 }

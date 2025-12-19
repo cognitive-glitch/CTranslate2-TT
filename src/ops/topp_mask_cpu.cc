@@ -6,6 +6,10 @@
 #include "cpu/parallel.h"
 #include "dispatch.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -60,12 +64,44 @@ namespace ctranslate2 {
       return std::numeric_limits<dim_t>::max();
     }
 
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    dim_t TopPMask::max_num_classes<Device::TT>() {
+      return std::numeric_limits<dim_t>::max();
+    }
+#endif
+
 #define DECLARE_IMPL(T)                                                 \
     template void TopPMask::compute<Device::CPU, T>(const StorageView&, \
                                                     const StorageView&, \
                                                     StorageView&) const;
 
     DECLARE_IMPL(float)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void TopPMask::compute<Device::TT, T>(const StorageView& input,
+                                          const StorageView& probs,
+                                          StorageView& output) const {
+      StorageView input_cpu = input.to(Device::CPU).to_float32();
+      StorageView probs_cpu = probs.to(Device::CPU).to_float32();
+      StorageView output_cpu(output.shape(), DataType::FLOAT32, Device::CPU);
+      TopPMask::compute<Device::CPU, float>(input_cpu, probs_cpu, output_cpu);
+      StorageView converted = output_cpu.to(output.dtype());
+      output.copy_from(converted);
+    }
+
+#define DECLARE_TT_IMPL(T)                                              \
+    template void TopPMask::compute<Device::TT, T>(const StorageView&,  \
+                                                   const StorageView&,  \
+                                                   StorageView&) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

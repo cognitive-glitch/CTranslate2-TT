@@ -6,6 +6,10 @@
 #include "cpu/parallel.h"
 #include "type_dispatch.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -61,6 +65,30 @@ namespace ctranslate2 {
                                            StorageView& indices) const;
 
     DECLARE_ALL_TYPES(DECLARE_IMPL)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename DataType, typename IndexType>
+    void TopK::compute<Device::TT, DataType, IndexType>(const StorageView& x,
+                                                        StorageView& values,
+                                                        StorageView& indices) const {
+      StorageView x_cpu = x.to(Device::CPU);
+      StorageView values_cpu(values.shape(), values.dtype(), Device::CPU);
+      StorageView indices_cpu(indices.shape(), indices.dtype(), Device::CPU);
+      TopK::compute<Device::CPU, DataType, IndexType>(x_cpu, values_cpu, indices_cpu);
+      values.copy_from(values_cpu);
+      indices.copy_from(indices_cpu);
+    }
+
+#define DECLARE_TT_IMPL(T)                                              \
+    template void                                                       \
+    TopK::compute<Device::TT, T, int32_t>(const StorageView& x,         \
+                                          StorageView& values,          \
+                                          StorageView& indices) const;
+
+    DECLARE_ALL_TYPES(DECLARE_TT_IMPL)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

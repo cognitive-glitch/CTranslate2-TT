@@ -10,6 +10,9 @@
 #ifdef CT2_WITH_CUDA
 #  include "cuda/utils.h"
 #endif
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
 
 #include "cpu/backend.h"
 
@@ -179,10 +182,14 @@ namespace ctranslate2 {
 
       _saved_compute_type = infer_compute_type();
       _requested_compute_type = type;
-      _effective_compute_type = resolve_compute_type(_requested_compute_type,
-                                                     _saved_compute_type,
-                                                     device,
-                                                     device_index);
+      if (device == Device::TT) {
+        _effective_compute_type = ComputeType::BFLOAT16;
+      } else {
+        _effective_compute_type = resolve_compute_type(_requested_compute_type,
+                                                       _saved_compute_type,
+                                                       device,
+                                                       device_index);
+      }
       _preferred_size_multiple = get_preferred_size_multiple(_effective_compute_type,
                                                              device,
                                                              device_index);
@@ -385,6 +392,34 @@ namespace ctranslate2 {
 
     // This method runs some precomputations on linear weights when possible.
     void Model::process_linear_weights() {
+      if (_device == Device::TT) {
+#ifdef CT2_WITH_TENSTORRENT
+        const auto variable_index = _variable_index;
+        for (const auto& pair : variable_index) {
+          const std::string& name = pair.first;
+          if (!is_linear_weight(name))
+            continue;
+
+          StorageView& weight = *pair.second;
+          if (weight.dtype() != DataType::BFLOAT16)
+            weight = weight.to(DataType::BFLOAT16);
+
+          if (tt::is_tile_compatible(weight.shape())) {
+            auto tensor = tt::resolve_tensor(weight.data<bfloat16_t>(),
+                                             weight.shape(),
+                                             weight.dtype());
+            if (tensor.layout() != ttnn::Layout::TILE) {
+              auto tiled = ttnn::to_layout(tensor, ttnn::Layout::TILE);
+              ttnn::copy(tiled, tensor);
+            }
+          }
+        }
+        return;
+#else
+        return;
+#endif
+      }
+
       if (_device != Device::CPU)
         return;  // There is currently no processing for non CPU device.
 

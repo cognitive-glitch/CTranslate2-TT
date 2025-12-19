@@ -11,7 +11,8 @@ namespace ctranslate2 {
 
   enum class Device {
     CPU,
-    CUDA
+    CUDA,
+    TT
   };
 
   Device str_to_device(const std::string& device);

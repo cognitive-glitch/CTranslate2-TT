@@ -24,5 +24,18 @@ namespace ctranslate2 {
 
     DECLARE_IMPL(float)
 
+#ifdef CT2_WITH_TENSTORRENT
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    BiasAdd::compute<Device::TT, T>(const StorageView& value,   \
+                                    const StorageView& bias,    \
+                                    StorageView& output) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
+
   }
 }

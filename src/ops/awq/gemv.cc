@@ -19,8 +19,8 @@ namespace ctranslate2 {
 #else
       if (a.dtype() != DataType::FLOAT16 && b.dtype() != DataType::INT32)
         throw std::invalid_argument("Awq gemm is only supported for float16 input and int32 weight");
-      if (a.device() == Device::CPU)
-        throw std::invalid_argument("Awq gemm is only supported on GPU");
+      if (a.device() != Device::CUDA)
+        throw std::invalid_argument("Awq gemm is only supported on CUDA");
 
       if (a.dim(0) > 8) {
         DEVICE_DISPATCH(a.device(), (compute_gemv2<D, float16_t, int>(a, b, scale, zero, c)));

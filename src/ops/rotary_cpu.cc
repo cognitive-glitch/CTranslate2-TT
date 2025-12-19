@@ -2,6 +2,10 @@
 
 #include "cpu/parallel.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -70,6 +74,37 @@ namespace ctranslate2 {
                                     bool) const;
 
     DECLARE_IMPL(float)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void Rotary::compute<Device::TT, T>(const StorageView& input,
+                                        const StorageView& sin,
+                                        const StorageView& cos,
+                                        StorageView& output,
+                                        bool is_transposed) const {
+      StorageView input_cpu = input.to(Device::CPU).to_float32();
+      StorageView sin_cpu = sin.to(Device::CPU).to_float32();
+      StorageView cos_cpu = cos.to(Device::CPU).to_float32();
+      StorageView output_cpu(output.shape(), DataType::FLOAT32, Device::CPU);
+      Rotary::compute<Device::CPU, float>(input_cpu, sin_cpu, cos_cpu, output_cpu, is_transposed);
+      StorageView converted = output_cpu.to(output.dtype());
+      output.copy_from(converted);
+    }
+
+#define DECLARE_TT_IMPL(T)                                              \
+    template void                                                       \
+    Rotary::compute<Device::TT, T>(const StorageView&,                  \
+                                   const StorageView&,                  \
+                                   const StorageView&,                  \
+                                   StorageView&,                        \
+                                   bool) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

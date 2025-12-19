@@ -31,5 +31,17 @@ namespace ctranslate2 {
 
     DECLARE_ALL_TYPES(DECLARE_IMPL)
 
+#ifdef CT2_WITH_TENSTORRENT
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    Tile::compute<Device::TT, T>(const StorageView& input,      \
+                                 const dim_t outer_size,        \
+                                 const dim_t inner_size,        \
+                                 StorageView& output) const;
+
+    DECLARE_ALL_TYPES(DECLARE_TT_IMPL)
+#undef DECLARE_TT_IMPL
+#endif
+
   }
 }

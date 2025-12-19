@@ -3,6 +3,10 @@
 #include "cpu/parallel.h"
 #include "type_dispatch.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -41,6 +45,42 @@ namespace ctranslate2 {
                                   StorageView& output) const;
 
     DECLARE_IMPL(float)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void Mean::compute<Device::TT, T>(const StorageView& input,
+                                      const dim_t outer_size,
+                                      const dim_t axis_size,
+                                      const dim_t inner_size,
+                                      const bool get_sum,
+                                      StorageView& output) const {
+      StorageView input_cpu = input.to(Device::CPU).to_float32();
+      StorageView output_cpu(output.shape(), DataType::FLOAT32, Device::CPU);
+      Mean::compute<Device::CPU, float>(input_cpu,
+                                        outer_size,
+                                        axis_size,
+                                        inner_size,
+                                        get_sum,
+                                        output_cpu);
+      StorageView converted = output_cpu.to(output.dtype());
+      output.copy_from(converted);
+    }
+
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    Mean::compute<Device::TT, T>(const StorageView& input,      \
+                                 const dim_t outer_size,        \
+                                 const dim_t axis_size,         \
+                                 const dim_t inner_size,        \
+                                 const bool get_sum,            \
+                                 StorageView& output) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

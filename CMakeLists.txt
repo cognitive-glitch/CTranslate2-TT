@@ -22,6 +22,7 @@ option(BUILD_TESTS "Compile the tests" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(WITH_TENSOR_PARALLEL "Compile with NCCL and MPI backend" OFF)
 option(WITH_FLASH_ATTN "Compile with Flash Attention 2" OFF)
+option(WITH_TENSTORRENT "Compile with Tenstorrent backend" OFF)
 
 if(ENABLE_PROFILING)
   message(STATUS "Enable profiling support")
@@ -442,6 +443,22 @@ if (WITH_RUY)
   add_subdirectory(third_party/ruy EXCLUDE_FROM_ALL)
   unset(CMAKE_POSITION_INDEPENDENT_CODE)
   list(APPEND LIBRARIES ruy)
+endif()
+
+if (WITH_TENSTORRENT)
+  list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+  find_package(Tenstorrent REQUIRED)
+  add_definitions(-DCT2_WITH_TENSTORRENT)
+  list(APPEND PRIVATE_INCLUDE_DIRECTORIES ${TENSTORRENT_INCLUDE_DIRS})
+  list(APPEND SOURCES
+    src/ops/conv1d_tt.cc
+    src/ops/flash_attention_tt.cc
+    src/tt/allocator.cc
+    src/tt/backend.cc
+    src/tt/primitives.cc
+    src/tt/utils.cc
+  )
+  list(APPEND LIBRARIES ${TENSTORRENT_LIBRARIES})
 endif()
 
 if (WITH_CUDA)

@@ -102,6 +102,14 @@ namespace ctranslate2 {
       return false;
 #endif
     }
+    case Device::TT:
+#ifdef CT2_WITH_TENSTORRENT
+      (void)device_index;
+      return true;
+#else
+      (void)device_index;
+      return false;
+#endif
     default:
       return false;
     }
@@ -118,6 +126,14 @@ namespace ctranslate2 {
       return false;
 #endif
     }
+    case Device::TT:
+#ifdef CT2_WITH_TENSTORRENT
+      (void)device_index;
+      return true;
+#else
+      (void)device_index;
+      return false;
+#endif
     default:
       return false;
     }
@@ -127,6 +143,8 @@ namespace ctranslate2 {
     switch (device) {
     case Device::CPU:
       return cpu::has_gemm_backend(ComputeType::INT16);
+    case Device::TT:
+      return false;
     default:
       return false;
     }
@@ -143,6 +161,8 @@ namespace ctranslate2 {
 #endif
     case Device::CPU:
       return cpu::has_gemm_backend(ComputeType::INT8);
+    case Device::TT:
+      return false;
     default:
       return false;
     }
@@ -350,6 +370,12 @@ namespace ctranslate2 {
       if ((compute_type == ComputeType::FLOAT16 || compute_type == ComputeType::BFLOAT16)
           && cuda::gpu_has_fp16_tensor_cores(device_index))
         return 8;
+    }
+#endif
+#ifdef CT2_WITH_TENSTORRENT
+    if (device == Device::TT) {
+      if (compute_type == ComputeType::FLOAT16 || compute_type == ComputeType::BFLOAT16)
+        return 32;
     }
 #else
     (void)compute_type;

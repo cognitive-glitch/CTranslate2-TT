@@ -2,6 +2,10 @@
 
 #include "ctranslate2/random.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -40,6 +44,28 @@ namespace ctranslate2 {
                                          StorageView& output) const;
 
     DECLARE_IMPL(float)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void Multinomial::compute<Device::TT, T>(const StorageView& input,
+                                             StorageView& output) const {
+      StorageView input_cpu = input.to(Device::CPU).to_float32();
+      StorageView output_cpu(output.shape(), output.dtype(), Device::CPU);
+      Multinomial::compute<Device::CPU, float>(input_cpu, output_cpu);
+      output.copy_from(output_cpu);
+    }
+
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    Multinomial::compute<Device::TT, T>(const StorageView& input, \
+                                        StorageView& output) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }

@@ -4,6 +4,10 @@
 
 #include "dispatch.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 #define PRINT_MAX_VALUES 6
 
 namespace ctranslate2 {
@@ -410,17 +414,34 @@ namespace ctranslate2 {
     if (size != _size)
       THROW_INVALID_ARGUMENT("buffer to copy is of size " + std::to_string(size)
                              + " but current storage size is " + std::to_string(_size));
-#ifdef CT2_WITH_CUDA
     if (device != _device) {
-      if (device == Device::CUDA)
+#ifdef CT2_WITH_CUDA
+      if (device == Device::CUDA && _device == Device::CPU) {
         cross_device_primitives<Device::CUDA, Device::CPU>::copy(data, this->data<T>(), size);
-      else
+        goto done_copy;
+      }
+      if (device == Device::CPU && _device == Device::CUDA) {
         cross_device_primitives<Device::CPU, Device::CUDA>::copy(data, this->data<T>(), size);
-    } else
+        goto done_copy;
+      }
 #endif
-    {
+#ifdef CT2_WITH_TENSTORRENT
+      if (device == Device::TT && _device == Device::CPU) {
+        tt::copy_device_to_host(data, this->data<T>(), _shape, _dtype);
+        goto done_copy;
+      }
+      if (device == Device::CPU && _device == Device::TT) {
+        tt::copy_host_to_device(data, this->data<T>(), _shape, _dtype);
+        goto done_copy;
+      }
+#endif
+      throw std::runtime_error("Unsupported cross-device copy from "
+                               + device_to_str(device) + " to " + device_to_str(_device));
+    } else {
       DEVICE_DISPATCH(device, primitives<D>::copy(data, this->data<T>(), size));
     }
+
+  done_copy:
 
     if (synchronous)
       synchronize_stream(_device);

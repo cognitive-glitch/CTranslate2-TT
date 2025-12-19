@@ -26,15 +26,23 @@
   switch (TYPE) {                                                       \
     TYPE_CASE(float, DEVICE_DISPATCH(DEVICE, (STMTS)))                  \
     TYPE_CASE(float16_t, {                                              \
-      if (DEVICE != Device::CUDA)                                       \
-        throw std::invalid_argument("FP16 " NAME " is only supported on GPU"); \
-      constexpr Device D = Device::CUDA;                                \
+      if (DEVICE != Device::CUDA                                        \
+#ifdef CT2_WITH_TENSTORRENT                                              \
+          && DEVICE != Device::TT                                       \
+#endif                                                                   \
+          )                                                             \
+        throw std::invalid_argument("FP16 " NAME " is only supported on GPU or TT"); \
+      constexpr Device D = DEVICE;                                      \
       (STMTS);                                                          \
     })                                                                  \
     TYPE_CASE(bfloat16_t, {                                             \
-      if (DEVICE != Device::CUDA)                                       \
-        throw std::invalid_argument("BF16 " NAME " is only supported on GPU"); \
-      constexpr Device D = Device::CUDA;                                \
+      if (DEVICE != Device::CUDA                                        \
+#ifdef CT2_WITH_TENSTORRENT                                              \
+          && DEVICE != Device::TT                                       \
+#endif                                                                   \
+          )                                                             \
+        throw std::invalid_argument("BF16 " NAME " is only supported on GPU or TT"); \
+      constexpr Device D = DEVICE;                                      \
       (STMTS);                                                          \
     })                                                                  \
     NON_FLOAT_CASE(NAME)                                                \

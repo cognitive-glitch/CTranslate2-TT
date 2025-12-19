@@ -1,0 +1,55 @@
+ARG TT_METALIUM_IMAGE=ghcr.io/tenstorrent/tt-metalium:latest
+FROM ${TT_METALIUM_IMAGE} as builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        python3-dev \
+        python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /root
+
+ENV TT_METAL_HOME=/opt/tt_metal
+ENV PYTHONPATH=${TT_METAL_HOME}/ttnn:${PYTHONPATH}
+
+COPY third_party third_party
+COPY cli cli
+COPY include include
+COPY src src
+COPY cmake cmake
+COPY python python
+COPY CMakeLists.txt .
+
+ARG CXX_FLAGS
+ENV CXX_FLAGS=${CXX_FLAGS:-"-O3"}
+
+ENV CTRANSLATE2_ROOT=/opt/ctranslate2
+
+RUN mkdir build_tmp && \
+    cd build_tmp && \
+    cmake -DCMAKE_INSTALL_PREFIX=${CTRANSLATE2_ROOT} \
+          -DWITH_TENSTORRENT=ON \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_FLAGS="${CXX_FLAGS}" \
+          -DTT_METAL_HOME=${TT_METAL_HOME} .. && \
+    make -j$(nproc) install
+
+RUN cd python && \
+    python3 -m pip --no-cache-dir install -r install_requirements.txt && \
+    python3 setup.py bdist_wheel --dist-dir ${CTRANSLATE2_ROOT}
+
+FROM ${TT_METALIUM_IMAGE}
+
+ENV CTRANSLATE2_ROOT=/opt/ctranslate2
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CTRANSLATE2_ROOT}/lib
+ENV TT_METAL_HOME=/opt/tt_metal
+ENV PYTHONPATH=${TT_METAL_HOME}/ttnn:${PYTHONPATH}
+
+COPY --from=builder ${CTRANSLATE2_ROOT} ${CTRANSLATE2_ROOT}
+RUN python3 -m pip --no-cache-dir install ${CTRANSLATE2_ROOT}/*.whl && \
+    rm ${CTRANSLATE2_ROOT}/*.whl
+
+ENTRYPOINT ["/opt/ctranslate2/bin/ct2-translator"]

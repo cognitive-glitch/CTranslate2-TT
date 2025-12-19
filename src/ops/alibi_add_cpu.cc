@@ -2,6 +2,10 @@
 
 #include "cpu/parallel.h"
 
+#ifdef CT2_WITH_TENSTORRENT
+#  include "tt/utils.h"
+#endif
+
 namespace ctranslate2 {
   namespace ops {
 
@@ -38,6 +42,34 @@ namespace ctranslate2 {
                                       StorageView& output) const;
 
     DECLARE_IMPL(float)
+
+#ifdef CT2_WITH_TENSTORRENT
+    template<>
+    template <typename T>
+    void AlibiAdd::compute<Device::TT, T>(const StorageView& input,
+                                          const StorageView& alibi,
+                                          const dim_t alibi_offset,
+                                          StorageView& output) const {
+      StorageView input_cpu = input.to(Device::CPU).to_float32();
+      StorageView alibi_cpu = alibi.to(Device::CPU).to_float32();
+      StorageView output_cpu(output.shape(), DataType::FLOAT32, Device::CPU);
+      AlibiAdd::compute<Device::CPU, float>(input_cpu, alibi_cpu, alibi_offset, output_cpu);
+      StorageView converted = output_cpu.to(output.dtype());
+      output.copy_from(converted);
+    }
+
+#define DECLARE_TT_IMPL(T)                                      \
+    template void                                               \
+    AlibiAdd::compute<Device::TT, T>(const StorageView& input,  \
+                                     const StorageView& alibi,  \
+                                     const dim_t alibi_offset,  \
+                                     StorageView& output) const;
+
+    DECLARE_TT_IMPL(float)
+    DECLARE_TT_IMPL(float16_t)
+    DECLARE_TT_IMPL(bfloat16_t)
+#undef DECLARE_TT_IMPL
+#endif
 
   }
 }
